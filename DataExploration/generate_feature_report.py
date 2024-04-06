@@ -22,11 +22,15 @@ The following statistics will be included:
 Each statistic will be generated as a particular method.
 """
 
+
+from config import FeaturePartitionEnum
 import pandas as pd
+import polars as pl
 import boto3
 from config import BUCKET_NAME
 from io import BytesIO
 
+CHUNK_SIZE = 10
 
 class FeatureReport:
 
@@ -40,9 +44,7 @@ class FeatureReport:
             Bucket=BUCKET_NAME,
             Prefix=self.feature_class_partition
         )        
-        print("Am I getting here")
         if 'Contents' in response:
-            print("How about here, if Contents in response")
             for obj in response['Contents']:
                 # Construct the file key
                 file_key = obj['Key']
@@ -56,6 +58,23 @@ class FeatureReport:
                     Bucket=BUCKET_NAME,
                     Key=file_key
                 )
-                df = pd.read_csv(BytesIO(file_obj['Body'].read()))
-                print(df.head())
+                for chunk in pd.read_csv(BytesIO(file_obj['Body'].read()), chunksize=CHUNK_SIZE):
+                    print(chunk)
+
+if __name__ == '__main__':
+    s3 = boto3.client("s3")
+        # Load base table
+    object_key = "train/base/train_base.csv"
+    base_feature_path = 'train/feature'
+
+    reponse = s3.get_object(Bucket=BUCKET_NAME, Key=object_key)
+
+    content = reponse['Body'].read()
+    base_df = pd.read_csv(BytesIO(content))
+
+    for feature_class in FeaturePartitionEnum:
+        if feature_class.value == 'applprev':
+            feature_class_partition = base_feature_path + '/' + feature_class.value
+            report = FeatureReport(base_df, feature_class_partition, s3)
+            report.combine_tables()
     

@@ -14,15 +14,17 @@ def main():
 
 
 def unpack_and_iterate_through_tables(base_df, depth_0, depth_1, depth_2):
-    feature_report = FeatureReport(base_df)
     for path in depth_0:
+
         if "*" in str(path):
             print("Do nothing for now. * represents multiple related tables.")
         else:
             train_df = Pipeline.read_file(path)
+            feature_report = FeatureReport(base_df, train_df)
+            feature_report.generate_report()
             # train_df = base_df.join(train_df, how="left", on="case_id").pipe(Pipeline.handle_dates)
             # cols_to_report = train_df.columns
-            means_report = feature_report.calculate_mean(train_df)
+
 
 if __name__ == '__main__':
     main()

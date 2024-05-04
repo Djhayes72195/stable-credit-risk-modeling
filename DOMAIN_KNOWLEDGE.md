@@ -11,7 +11,7 @@ as well as feature selection in a more general sense.
 
 https://medium.com/datadriveninvestor/credit-scoring-choose-the-modeling-methodology-right-part-2-13b5abad8ab6
 
-Credit scoring is achieved by many methods. Recent techniques include the utilization of hundreds or thousands of models, ensemble techniques, etc. however, there is a tandout model called the credit scorecard model, based on logistic regression. Easy to build and execute. In fact, scorecard models are sometimes mandaded by regulators  in some countries for their explainability.
+Credit scoring is achieved by many methods. Recent techniques include the utilization of hundreds or thousands of models, ensemble techniques, etc. however, there is a standout model called the credit scorecard model, based on logistic regression. Easy to build and execute. In fact, scorecard models are sometimes mandaded by regulators  in some countries for their explainability.
 
 A scorecard model conssits of a set of attributes. Within an attribute, weighted points or scores are assigned to each attribute value. The sum of these scores is the final credit score.
 

@@ -19,7 +19,26 @@ The following statistics will be included:
 - Skewedness
 - Kurtosis
 
-Each statistic will be generated as a particular method.
+Each statistic will be generated with a particular method.
+
+The feature report should take this general form:
+
+Numeric report:
+            | mean_no_default | mean_default | median_no_default | median_default |   .......
+feature 1   |      val        |     val      |     .........     |     ........   |
+feature 2   |
+    ...
+    ...                                     ......
+
+
+Categorical report:
+            | WoE_feature_class1 | WoE_feature_class2 |       ...      | Information Value |   .......
+feature 1   |      val           |     val            |     .........  |     ........      |
+feature 2   |
+    ...
+    ...                                     ......
+
+The ultimate destination of this data is a set of dashboards generated with plotly.
 """
 
 
@@ -33,6 +52,8 @@ from DataProcessing.pipeline import Pipeline
 
 CHUNK_SIZE = 10
 POLARS_NUMERIC_TYPES = (pl.Int32, pl.Int64, pl.Float32, pl.Float64)
+DEFAULT = "_default"
+NO_DEFAULT = "_no_default"
 
 class FeatureReport:
 
@@ -65,31 +86,38 @@ class FeatureReport:
         pass
     
     def calculate_mean(self):
-        """
-        Return a dict which maps the name of the col to the mean
-        value of the column.
-        """
-        # cols_to_report = train_df.columns
+        mean_values = {}
         for col in self.numerical_cols:
-            mean = self.train_df.select(pl.col(col).mean()).to_numpy()[0]
-            self.means[col] = mean
-        else:
+            try:
+                mean = self.train_df.select(pl.col(col).mean()).to_numpy()[0]
+                mean_no_default = self.train_df.filter(pl.col('target') == 0).select(pl.col(col).mean()).to_numpy()[0]
+                mean_default = self.train_df.filter(pl.col('target') == 1).select(pl.col(col).mean()).to_numpy()[0]
+                mean_values[col] = mean
+                mean_values[col + NO_DEFAULT] = mean_no_default
+                mean_values[col + DEFAULT] = mean_default
+            except Exception as e:
+                print(f"Error calculating mean for column {col}: {str(e)}")
+                mean_values[col] = np.nan
+        for col in self.cat_cols:
             self.means[col] = np.nan
+        
+        self.means = pd.DataFrame.from_dict(mean_values, orient='index', columns=['mean'])
 
-        # train_df = self.base_df.join(train_df, how="left", on="case_id").pipe(Pipeline.handle_dates)
-        # feature_name_to_mean_dict = {
-        #     str(col): train_df.select(pl.col(col).mean()).to_numpy()[0]
-        #     for col in train_df.columns
-        #     if train_df[col].dtype in POLARS_NUMERIC_TYPES
-        #     and col in cols_to_report
-        # }
 
     def calculate_median(self):
+        median_values = {}
         for col in self.numerical_cols:
-            median = self.train_df.select(pl.col(col).median()).to_numpy()[0]
-            self.medians[col] = median
-        else:
-            self.medians[col] = np.nan     
+            try:
+                median = self.train_df.select(pl.col(col).median()).to_numpy()[0]
+                median_values[col] = median
+            except Exception as e:
+                print(f"Error calculating median for column {col}: {str(e)}")
+                median_values[col] = median
+
+        for col in self.cat_cols:
+            self.median[col] = np.nan
+
+        self.medians = pd.DataFrame.from_dict(median_values, orient='index', columns=['median'])    
 
     def calculate_variance(self):
         for col in self.numerical_cols:

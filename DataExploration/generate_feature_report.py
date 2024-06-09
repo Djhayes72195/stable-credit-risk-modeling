@@ -15,6 +15,9 @@ The following statistics will be included:
 - Number of missing values
 - Data type (categorical or numerical)
 - Number of unique values (categorical)
+- Chi Squared test
+- Information gain
+- Fisher value
 - Min and max values (numerical)
 - Skewedness
 - Kurtosis

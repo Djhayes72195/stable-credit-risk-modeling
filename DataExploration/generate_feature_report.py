@@ -6,21 +6,23 @@ a report. Each row of the report corresponds to a feature and each column a stat
 
 The following statistics will be included:
 
-- Mean (default/no_default)
-- Median (default/no_default)
-- Variance (default/no_default)
-- Weight of Evidence
-- Information Value
-- Correlation with Target
-- Number of missing values
+- Mean (numerical, default/no_default)
+- Median (numerical, default/no_default)
+- Variance (numerical, default/no_default)
+- Weight of Evidence (categorical, don't display, store for analysis)
+- Information Value (categorical)
+- Correlation with Target (single)
+- Number of missing values (numerical or categorical)
 - Data type (categorical or numerical)
 - Number of unique values (categorical)
-- Chi Squared test
-- Information gain
-- Fisher value
+- Chi Squared test (categorical)
 - Min and max values (numerical)
 - Skewedness
 - Kurtosis
+
+If time permits:
+- Information gain (categorical)
+- Fisher value 
 
 Each statistic will be generated with a particular method.
 
@@ -35,8 +37,8 @@ feature 2   |
 
 
 Categorical report:
-            | WoE_feature_class1 | WoE_feature_class2 |       ...      | Information Value |   .......
-feature 1   |      val           |     val            |     .........  |     ........      |
+            |         WoE        | Information Value |   .......      |                   |
+feature 1   |         df         |        val        |     .........  |     ........      |
 feature 2   |
     ...
     ...                                     ......
@@ -81,12 +83,14 @@ class FeatureReport:
         self.variances = pd.DataFrame()
         self.medians = pd.DataFrame()
         self.woes = pd.DataFrame()
+        self.IVs = pd.DataFrame()
 
     def generate_report(self):
         # self.calculate_mean()
         # self.calculate_median()
         # self.calculate_variance()
-        self.calculate_woe()
+        self.calculate_woe_iv()
+        self.calculate_correlation_with_target()
         pass
     
     def calculate_mean(self):
@@ -188,14 +192,33 @@ class FeatureReport:
 
         self.variances = pd.DataFrame(var_values, index=feature)
 
-    def calculate_woe(self):
+    def calculate_correlation_with_target(self):
+        # implement point_biserial_corr
+        pass
+
+
+    def calculate_woe_iv(self):
+        """
+        WoE = ln(prop_goods/prop_bads)
+        IV = sum((prop_goods - prop_bads) * WoE)
+
+        WoE is calculated for each feature / category combination
+        IV is calculated for each feature.
+
+        WoE df is flattened w/ columns [feature, category, WoE]
+
+        TODO: Review calc and set numerical cols to nan.
+        """
         woe_dict = {}
+        iv_dict = {}
+        features = []
         for col in self.cat_cols:
             df = self.train_df.select(pl.col(col), pl.col('target')).filter(pl.col(col).is_not_null())
             cardinality = df.select(pl.col(col).n_unique())[0, 0]
             if cardinality == 1 or cardinality > 100:
                 print(f"{col} has unsuitable cardinality {cardinality}, skipping woe calculation.")
                 continue
+            features.append(col)
             
             total_goods = df.filter(pl.col('target') == 0).shape[0]
             total_bads = df.filter(pl.col('target') == 1).shape[0]
@@ -205,19 +228,36 @@ class FeatureReport:
                 (pl.col("target") == 1).sum().alias("bads")
             ])
 
-            # Calculate WoE for each category
-            # WoE = ln((goods / total_goods) / (bads / total_bads))
             # Add a small epsilon to avoid division by zero
             epsilon = 1e-10
             category_stats = category_stats.with_columns([
-                ((pl.col('goods') / pl.lit(total_goods)) / (pl.col('bads') / pl.lit(total_bads) + pl.lit(epsilon))).log().alias('WoE')
+                (pl.col('goods') / (pl.lit(total_goods) + epsilon)).alias('prop_goods'),
+                (pl.col('bads') / (pl.lit(total_bads) + epsilon)).alias('prop_bads')
             ])
+            category_stats = category_stats.with_columns([
+                (pl.col('prop_goods') / pl.col('prop_bads') + epsilon).log().alias('WoE')
+            ])
+            category_stats = category_stats.with_columns([
+                ((pl.col('prop_goods') - pl.col('prop_bads')) * pl.col('WoE')).alias('IV')
+            ])
+            woe_dict[col] = category_stats.select(pl.col(col), pl.col('WoE')).to_pandas()
+            iv = category_stats.select(pl.col('IV').sum()).item()
+            iv_dict[col] = iv
 
-            woe_dict[col] = category_stats.select(pl.col(col), pl.col('WoE'))
+        # flatten dictionary
+        woe_list = []
+        for feature, df in woe_dict.items():
+            df['feature'] = feature
+            df = df.rename(columns={feature: 'category'})
+            woe_list.append(df)
 
-        # Convert the woe_dict to a DataFrame if needed
-        # You might want to concatenate them into a single DataFrame depending on your needs
-        self.woe_df = pd.concat([df.to_pandas() for df in woe_dict.values()], ignore_index=True)
+        woe_df = pd.concat(woe_list, ignore_index=True)
+
+        # Reorder columns to have 'feature' as the first column
+        self.woes = woe_df[['feature', 'category', 'WoE']]
+        self.IVs = pd.DataFrame.from_dict(iv_dict, orient='index', columns=['IV'])
+
+        
 
 
 # if __name__ == '__main__':

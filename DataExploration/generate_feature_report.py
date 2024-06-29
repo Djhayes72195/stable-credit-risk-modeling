@@ -43,6 +43,8 @@ feature 2   |
     ...                                     ......
 
 The ultimate destination of this data is a set of dashboards generated with plotly.
+
+TODO: Write unit tests to verify correctness.
 """
 
 
@@ -95,24 +97,33 @@ class FeatureReport:
         self.min_and_max = pd.DataFrame()
         self.skew = pd.DataFrame()
         self.kurtosis = pd.DataFrame()
+        self.mutual_info = pd.DataFrame()
+
+        self.metrics = {
+            "numerical": pd.DataFrame(),
+            "categorical": pd.DataFrame(),
+            "non_typed": pd.DataFrame()
+        }
 
     def generate_report(self):
-        # self.calculate_mean()
-        # self.calculate_median()
-        # self.calculate_min_and_max()
-        # self.calculate_variance()
-        # self.calculate_pct_na()
-        # self.calculate_chi_squ_test()
-        self.calculate_mutual_info()
+        self.calculate_mean()
+        self.calculate_median()
+        self.calculate_min_and_max()
+        self.calculate_variance()
+        self.calculate_pct_na()
+        self.calculate_chi_squ_test()
+        # self.calculate_mutual_info()
         self.calculate_skew()
         self.calculate_kurtosis()
-        # self.calculate_woe_iv()
-        # self.calculate_correlation_with_target()
+        self.calculate_woe_iv()
+        self.calculate_correlation_with_target()
         self.calculate_number_of_unique_val()
-        pass
+        x = 2
 
-    def calculate_mutual_info(self):
+    def calculate_mutual_info(self, random_sample=True):
         """
+        TODO: Double check this calculation before using it.
+
         Measure mutual information
         
         Mutual information is a measurement of the degree of independence of
@@ -124,10 +135,21 @@ class FeatureReport:
         Remaining nulls are imputed using sklearn SimpleImputer. Nulls in numerical
         columns are filled with the mean of that column. Nulls in categorical columns
         are filled with the mode.
+
+        MI(X; Y) = H(X) - H(X|Y)
+
+        Where
+            - MI is the mutual information for X (feature) and Y (target)
+            - H(X) is the entropy of X, H(X) = -sum[P(x)log(P(x))]
+            - H(X|Y) is the entropy of X given Y
+
+        Note: Mutual information can take a long time to calculate. During development
+        and testing I will calc MI using a random sample of 20% of each dataframe to speed up
+        the operation.
         """
-        mi_cat = {}
-        mi_num = {}
-        target = self.train_df['target']
+        df = self.train_df.to_pandas()
+        df = df.sample(frac=0.2, random_state=42) if random_sample else df
+        target = df['target']
 
         # Ensure pct of na and num of unique vals is calculated first
         if self.pct_na_vals_cat.empty or self.pct_na_vals_num.empty:
@@ -142,16 +164,18 @@ class FeatureReport:
         cols_to_drop = list(cols_to_drop_cardinality | cols_to_drop_na)
         cols = [col for col in self.columns_to_report if col not in cols_to_drop]
 
-        df = self.train_df[cols].to_pandas()
+        df = df[cols]
 
-        # Impute values for NaN
+        obj_cols = df.select_dtypes(include=['object']).columns
+        df[obj_cols] = df[obj_cols].astype('category') # Convert to category; The following calculations do not seem to handle object cols well
+
         # Impute missing values for numeric features
         imputer_num = SimpleImputer(strategy='mean')
         df[df.select_dtypes(include=[np.number]).columns] = imputer_num.fit_transform(df.select_dtypes(include=[np.number]))
 
         # Impute missing values for categorical features with most frequent value
         imputer_cat = SimpleImputer(strategy='most_frequent')
-        df[df.select_dtypes(include=['object']).columns] = imputer_cat.fit_transform(df.select_dtypes(include=['object']))
+        df[df.select_dtypes(include=['category']).columns] = imputer_cat.fit_transform(df.select_dtypes(include=['category']))
 
 
         # Encode categorical variables
@@ -160,8 +184,8 @@ class FeatureReport:
             df[col] = le.fit_transform(df[col])
 
         mi = mutual_info_classif(df, target)
-
-
+        self.mutual_info = pd.DataFrame(mi, index=cols, columns=['MutualInformation'])
+        self.metrics['non_typed'] = pd.concat([self.metrics['non_typed'], self.mutual_info], axis=1)
 
     def calculate_skew(self):
         skew_dict = {}
@@ -169,13 +193,15 @@ class FeatureReport:
             skewedness = skew(self.train_df[col].drop_nulls())
             skew_dict[col] = skewedness
         self.skew = pd.DataFrame.from_dict(skew_dict, orient='index', columns=['Skewedness'])
+        self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.skew], axis=1)
 
     def calculate_kurtosis(self):
         kurt_dict = {}
         for col in self.numerical_cols:
             kurt = kurtosis(self.train_df[col].drop_nulls())
             kurt_dict[col] = kurt
-        self.skew = pd.DataFrame.from_dict(kurt_dict, orient='index', columns=['Skewedness'])       
+        self.kurtosis = pd.DataFrame.from_dict(kurt_dict, orient='index', columns=['Kurtosis'])  
+        self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.kurtosis], axis=1)     
 
     def calculate_pct_na(self):
         pct_na_cat_dict = {}
@@ -189,6 +215,8 @@ class FeatureReport:
                 pct_na_num_dict[col] = num_na / total_num_of_val
         self.pct_na_vals_cat = pd.DataFrame.from_dict(pct_na_cat_dict, orient='index', columns=['PctNA'])
         self.pct_na_vals_num = pd.DataFrame.from_dict(pct_na_num_dict, orient='index', columns=['PctNA'])
+        self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.pct_na_vals_num], axis=1)
+        self.metrics['categorical'] = pd.concat([self.metrics['categorical'], self.pct_na_vals_cat], axis=1)
 
     def calculate_chi_squ_test(self):
         chi_squ_test_res = {
@@ -206,6 +234,7 @@ class FeatureReport:
             chi_squ_test_res['P-val'].append(p)
             chi_squ_test_res['Chi2'].append(chi2)
         self.chi2 = pd.DataFrame(chi_squ_test_res, index=feature)
+        self.metrics['categorical'] = pd.concat([self.metrics['categorical'], self.chi2], axis=1)
 
     def calculate_min_and_max(self):
         min_and_max = {
@@ -218,6 +247,7 @@ class FeatureReport:
             min_and_max['max'].append(self.train_df[col].max())
             feature.append(col)
         self.min_and_max = pd.DataFrame(min_and_max, index=feature)
+        self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.min_and_max], axis=1)
     
     def calculate_mean(self):
         mean_values = {
@@ -242,17 +272,8 @@ class FeatureReport:
                 mean_values['mean_no_default'].append(np.nan)
                 mean_values['mean_default'].append(np.nan)
 
-        # for col in self.cat_cols:
-        #     feature.append(col)
-        #     mean_values['mean'].append(np.nan)
-        #     mean_values['mean_no_default'].append(np.nan)
-        #     mean_values['mean_default'].append(np.nan)
-
         self.means = pd.DataFrame(mean_values, index=feature)
-
-        
-        # self.means = pd.DataFrame.from_dict(mean_values, orient='index', columns=['mean'])
-
+        self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.means], axis=1)
 
     def calculate_median(self):
         median_values = {
@@ -284,7 +305,8 @@ class FeatureReport:
         #     median_values['median_no_default'].append(np.nan)
         #     median_values['median_default'].append(np.nan)
 
-        self.medians = pd.DataFrame(median_values, index=feature) 
+        self.medians = pd.DataFrame(median_values, index=feature)
+        self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.medians], axis=1)
 
     def calculate_variance(self):
         var_values = {
@@ -317,6 +339,7 @@ class FeatureReport:
         #     var_values['variance_default'].append(np.nan)
 
         self.variances = pd.DataFrame(var_values, index=feature)
+        self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.variances], axis=1)
 
     def calculate_correlation_with_target(self):
         # implement point_biserial_corr
@@ -327,9 +350,8 @@ class FeatureReport:
         for col in self.cat_cols:
             num_unique = self.train_df.select(pl.col(col).n_unique())[0, 0]
             num_unique_dict[col] = num_unique
-        # for col in self.numerical_cols:
-        #     num_unique_dict[col] = np.nan
         self.num_unique = pd.DataFrame.from_dict(num_unique_dict, orient='index', columns=['NumUnique'])
+        self.metrics['categorical'] = pd.concat([self.metrics['categorical'], self.num_unique], axis=1)
 
 
     def calculate_woe_iv(self):
@@ -391,24 +413,6 @@ class FeatureReport:
         # Reorder columns to have 'feature' as the first column
         self.woes = woe_df[['feature', 'category', 'WoE']]
         self.IVs = pd.DataFrame.from_dict(iv_dict, orient='index', columns=['IV'])
+        self.metrics['categorical'] = pd.concat([self.metrics['categorical'], self.IVs], axis=1)
 
-        
-
-
-# if __name__ == '__main__':
-#     s3 = boto3.client("s3")
-#         # Load base table
-#     object_key = "train/base/train_base.csv"
-#     base_feature_path = 'train/feature'
-
-#     reponse = s3.get_object(Bucket=BUCKET_NAME, Key=object_key)
-
-#     content = reponse['Body'].read()
-#     base_df = pd.read_csv(BytesIO(content))
-
-#     for feature_class in FeaturePartitionEnum:
-#         if feature_class.value == 'applprev':
-#             feature_class_partition = base_feature_path + '/' + feature_class.value
-#             report = FeatureReport(base_df, feature_class_partition, s3)
-#             report.combine_tables()
     

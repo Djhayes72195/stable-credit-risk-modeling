@@ -2,23 +2,49 @@ from DataProcessing.aggregator import Aggregator
 from DataProcessing.pipeline import Pipeline
 from .generate_feature_report import FeatureReport
 from .config import data_store
+from Utility.helper_functions import setup_logger
+import logging
 import polars as pl
+import pandas as pd
 
 def main():
+    logger = setup_logger()
+    logger.info("Beginning feature report process.")
     base_data = data_store.pop('df_base', None)
-    print('It did run...')
 
     base_df = Pipeline.read_file(base_data)
 
-    unpack_and_iterate_through_tables(base_df, **data_store)
+    unpack_and_iterate_through_tables(base_df, logger, **data_store)
 
 
-def unpack_and_iterate_through_tables(base_df, depth_0, depth_1, depth_2):
+def unpack_and_iterate_through_tables(base_df, logger, depth_0, depth_1, depth_2):
+    numerical_metrics, categorical_metrics = pd.DataFrame(), pd.DataFrame()
+    # TODO: Make DRY
     for path in depth_0:
-        read_function = Pipeline.read_files if "*" in str(path) else Pipeline.read_file
-        train_df = read_function(path)
-        feature_report = FeatureReport(base_df, train_df)
-        feature_report.generate_report()
+        depth = 0
+        metrics = generate_feature_report(base_df, logger, path, depth)
+        numerical_metrics = pd.concat([numerical_metrics, metrics['numerical']], axis=0)
+        categorical_metrics = pd.concat([categorical_metrics, metrics['categorical']], axis=0)
+    for path in depth_1:
+        depth = 1
+        metrics = generate_feature_report(base_df, logger, path, depth)
+        numerical_metrics = pd.concat([numerical_metrics, metrics['numerical']], axis=0)
+        categorical_metrics = pd.concat([categorical_metrics, metrics['categorical']], axis=0)
+    for path in depth_2:
+        depth = 2
+        metrics = generate_feature_report(base_df, logger, path, depth)
+        numerical_metrics = pd.concat([numerical_metrics, metrics['numerical']], axis=0)
+        categorical_metrics = pd.concat([categorical_metrics, metrics['categorical']], axis=0)
+    x = 2
+
+def generate_feature_report(base_df, logger, path, depth):
+    logger.info(f"Processing depth {depth} table.")
+    read_function = Pipeline.read_files if "*" in str(path) else Pipeline.read_file
+    train_df = read_function(path).pipe(Pipeline.apply_pipeline, base_df=base_df, depth=depth)
+    feature_report = FeatureReport(train_df, logger)
+    feature_report.generate_report()
+    return feature_report.metrics
+
 
 
 if __name__ == '__main__':

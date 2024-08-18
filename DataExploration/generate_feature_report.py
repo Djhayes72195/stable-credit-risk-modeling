@@ -51,7 +51,6 @@ TODO: Write unit tests to verify correctness.
 from .config import FeaturePartitionEnum, BUCKET_NAME, CORE_COLUMNS
 import pandas as pd
 import polars as pl
-import boto3
 import numpy as np
 from io import BytesIO
 from collections import Counter
@@ -62,20 +61,19 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.impute import SimpleImputer
 
 CHUNK_SIZE = 10
-POLARS_NUMERIC_TYPES = (pl.Int32, pl.Int64, pl.Float32, pl.Float64)
+POLARS_NUMERIC_TYPES = (pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64)
 DEFAULT = "_default"
 NO_DEFAULT = "_no_default"
 
 class FeatureReport:
 
-    def __init__(self, base_df, train_df):
-        self.base_df = base_df
+    def __init__(self, train_df, logger):
+        self.logger = logger
+        self.logger.info("Initializing feature report.")
         self.columns_to_report = train_df.drop('case_id').columns
+        self.train_df = train_df
         self.numerical_cols = []
         self.cat_cols = []
-
-        # Join base df because it contains columns required for preprocessing
-        self.train_df = base_df.join(train_df, how="left", on="case_id").pipe(Pipeline.handle_dates)
 
         for col in self.columns_to_report:
             if self.train_df.dtypes[self.train_df.columns.index(str(col))] in POLARS_NUMERIC_TYPES:
@@ -83,6 +81,9 @@ class FeatureReport:
             else:
                 self.cat_cols.append(col)
 
+        # Output will be in pandas:
+                # - Certain operations utilize functionality specific to pandas
+                # - Data quantity is drastically reduced, so the efficiency afforded by polars isn't required.
         self.numeric_report = pd.DataFrame()
         self.catagorical_report = pd.DataFrame()
         self.means = pd.DataFrame()
@@ -118,7 +119,6 @@ class FeatureReport:
         self.calculate_woe_iv()
         self.calculate_correlation_with_target()
         self.calculate_number_of_unique_val()
-        x = 2
 
     def calculate_mutual_info(self, random_sample=True):
         """
@@ -147,6 +147,7 @@ class FeatureReport:
         and testing I will calc MI using a random sample of 20% of each dataframe to speed up
         the operation.
         """
+        self.logger.info("Calculating mutual information.")
         df = self.train_df.to_pandas()
         df = df.sample(frac=0.2, random_state=42) if random_sample else df
         target = df['target']
@@ -188,6 +189,7 @@ class FeatureReport:
         self.metrics['non_typed'] = pd.concat([self.metrics['non_typed'], self.mutual_info], axis=1)
 
     def calculate_skew(self):
+        self.logger.info("Calculating skew.")
         skew_dict = {}
         for col in self.numerical_cols:
             skewedness = skew(self.train_df[col].drop_nulls())
@@ -196,6 +198,7 @@ class FeatureReport:
         self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.skew], axis=1)
 
     def calculate_kurtosis(self):
+        self.logger.info("Calculating kurtosis.")
         kurt_dict = {}
         for col in self.numerical_cols:
             kurt = kurtosis(self.train_df[col].drop_nulls())
@@ -204,6 +207,7 @@ class FeatureReport:
         self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.kurtosis], axis=1)     
 
     def calculate_pct_na(self):
+        self.logger.info("Calculating precent NA")
         pct_na_cat_dict = {}
         pct_na_num_dict = {}
         total_num_of_val = self.train_df.shape[0]
@@ -219,6 +223,7 @@ class FeatureReport:
         self.metrics['categorical'] = pd.concat([self.metrics['categorical'], self.pct_na_vals_cat], axis=1)
 
     def calculate_chi_squ_test(self):
+        self.logger.info("Calculating Chi2 test results.")
         chi_squ_test_res = {
             "Significant": [],
             "P-val": [],
@@ -250,6 +255,7 @@ class FeatureReport:
         self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.min_and_max], axis=1)
     
     def calculate_mean(self):
+        self.logger.info("Calculating means.")
         mean_values = {
             'mean': [],
             'mean_no_default': [],
@@ -276,6 +282,7 @@ class FeatureReport:
         self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.means], axis=1)
 
     def calculate_median(self):
+        self.logger.info("Calculating medians.")
         median_values = {
             'median': [],
             'median_no_default': [],
@@ -309,6 +316,7 @@ class FeatureReport:
         self.metrics['numerical'] = pd.concat([self.metrics['numerical'], self.medians], axis=1)
 
     def calculate_variance(self):
+        self.logger.info("Calculating variance.")
         var_values = {
             'variance': [],
             'variance_no_default': [],
@@ -346,6 +354,7 @@ class FeatureReport:
         pass
 
     def calculate_number_of_unique_val(self):
+        self.logger.info("Calculating # of unique vals.")
         num_unique_dict = {}
         for col in self.cat_cols:
             num_unique = self.train_df.select(pl.col(col).n_unique())[0, 0]
@@ -366,6 +375,7 @@ class FeatureReport:
 
         TODO: Review calc and set numerical cols to nan.
         """
+        self.logger.info("Calculating WoE and IV.")
         woe_dict = {}
         iv_dict = {}
         features = []

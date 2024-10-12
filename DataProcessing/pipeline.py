@@ -220,12 +220,15 @@ class Pipeline:
         chunks = []
 
         for path in glob(str(regex_path)):
+            print(f'attempting to read {path}')
             df = pl.read_parquet(path)
+            # TODO: credit buero data is too big, must aggregate here in chunks.
             # df = df.pipe(Pipeline.set_table_dtypes)
             # if depth in [1, 2]:
             #     df = df.group_by("case_id").agg(Aggregator.get_exprs(df))
             chunks.append(df)
-        
+            print(f'successfully ready {path}')
+        print('++++++++++ALL FILES READ+++++++++++++')
         df = pl.concat(chunks, how="vertical_relaxed")
         df = df.unique(subset=["case_id"])
         return df

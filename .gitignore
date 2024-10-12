@@ -5,3 +5,7 @@ new_env/
 __pycache__/
 launch.json
 */*.pyc
+*.log
+*.dat
+*.pyc
+*.txt

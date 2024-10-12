@@ -107,18 +107,23 @@ class FeatureReport:
         }
 
     def generate_report(self):
-        self.calculate_mean()
-        self.calculate_median()
-        self.calculate_min_and_max()
-        self.calculate_variance()
-        self.calculate_pct_na()
-        self.calculate_chi_squ_test()
+        self.calculate_number_of_unique_val() # Num/Cat
+        self.calculate_pct_na() # Num/Cat
+
+        if self.numerical_cols:
+            self.calculate_mean()
+            self.calculate_median()
+            self.calculate_min_and_max()
+            self.calculate_variance()
+            self.calculate_correlation_with_target()
+            self.calculate_skew()
+            self.calculate_kurtosis()
+
+        if self.cat_cols:
+            self.calculate_woe_iv()
+            self.calculate_chi_squ_test()
+
         # self.calculate_mutual_info()
-        self.calculate_skew()
-        self.calculate_kurtosis()
-        self.calculate_woe_iv()
-        self.calculate_correlation_with_target()
-        self.calculate_number_of_unique_val()
 
     def calculate_mutual_info(self, random_sample=True):
         """
@@ -131,7 +136,7 @@ class FeatureReport:
         a mutual information value of around 0. If they are highly dependent, we
         expect a mutual information value of close to 1.
 
-        Columns with more than .8 nullness are removed before this calculation.
+        Columns with more than .8 nullness are removed before this calculation. #TODO Are high null cols already removed?
         Remaining nulls are imputed using sklearn SimpleImputer. Nulls in numerical
         columns are filled with the mean of that column. Nulls in categorical columns
         are filled with the mode.
@@ -375,6 +380,7 @@ class FeatureReport:
 
         TODO: Review calc and set numerical cols to nan.
         """
+        self.logger.info('got to woe calc')
         self.logger.info("Calculating WoE and IV.")
         woe_dict = {}
         iv_dict = {}

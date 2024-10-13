@@ -12,10 +12,12 @@ class FeaturePartitionEnum(Enum):
     TAX_REGISTRY = 'tax_registry'
 
 BUCKET_NAME = "credit-risk-modeling-dj72195"
-ROOT = Path('/Users/dustinhayes/Desktop/GitHub/stable-credit-risk-modeling/Data')
-TRAIN_DIR = ROOT / "original_parquet_files" / "train"
-TEST_DIR = ROOT / "original_parquet_files" / "test"
+ROOT = Path('/Volumes/My Passport for Mac/CreditRiskModeling')
+TRAIN_DIR = ROOT / "train"
+TEST_DIR = ROOT / "test"
 CORE_COLUMNS = ["target", "case_id", "WEEK_NUM", "num_group1", "num_group2"]
+
+FEATURE_REPORT_PATH = Path('/Users/dustinhayes/Desktop/GitHub/stable-credit-risk-modeling/Data/FeatureReport')
 
 
 # Paths with * map to multiple files that should be proecessed together

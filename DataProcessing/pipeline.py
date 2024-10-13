@@ -203,17 +203,17 @@ class Pipeline:
         return df
 
 
-    def read_file(path, depth=None):
+    def read_file(path, col_set=None):
         """
         Reads a parquet file
         """
-        df = pl.read_parquet(path)
+        df = pl.read_parquet(path, columns=col_set)
         # df = df.pipe(Pipeline.set_table_dtypes)
         # if depth in [1,2]:
         #     df = df.group_by("case_id").agg(Aggregator.get_exprs(df)) 
         return df
 
-    def read_files(regex_path, depth=None):
+    def read_files(regex_path, col_set=None):
         """
         Read multiple parquet files and concat results.
         """
@@ -221,13 +221,13 @@ class Pipeline:
 
         for path in glob(str(regex_path)):
             print(f'attempting to read {path}')
-            df = pl.read_parquet(path)
+            df = pl.read_parquet(path, columns=col_set)
             # TODO: credit buero data is too big, must aggregate here in chunks.
             # df = df.pipe(Pipeline.set_table_dtypes)
             # if depth in [1, 2]:
             #     df = df.group_by("case_id").agg(Aggregator.get_exprs(df))
             chunks.append(df)
-            print(f'successfully ready {path}')
+            print(f'successfully read {path}')
         print('++++++++++ALL FILES READ+++++++++++++')
         df = pl.concat(chunks, how="vertical_relaxed")
         df = df.unique(subset=["case_id"])

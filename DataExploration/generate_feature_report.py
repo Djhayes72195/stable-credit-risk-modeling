@@ -418,6 +418,9 @@ class FeatureReport:
             iv_dict[col] = iv
 
         # flatten dictionary
+        if not woe_dict:
+            return # All features unsuitable for woe calc
+
         woe_list = []
         for feature, df in woe_dict.items():
             df['feature'] = feature

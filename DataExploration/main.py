@@ -21,60 +21,6 @@ def main():
 
     unpack_and_iterate_through_tables(base_df, logger, data_store)
 
-
-# def unpack_and_iterate_through_tables(base_df, logger, data_store):
-#     numerical_metrics, categorical_metrics = pd.DataFrame(), pd.DataFrame()
-#     feature_mapping = {'Source': [], 'Feature': []}
-#     for depth in data_store.keys():
-#         for path in data_store[depth]:
-#             depth_num: int = int(depth.split("_")[-1])
-#             multi_path = "*" in str(path)
-#             if multi_path:
-#                 path_to_scan = Path(str(path).replace("*", "0")) # All paths contained within * path share the same cols.
-#                 feature_set = list(pl.scan_parquet(path_to_scan).columns)
-#                 col_sets = split_features(feature_set, 4)
-#             else:
-#                 feature_set = list(pl.scan_parquet(path).columns)
-#                 col_sets = [feature_set]
-#             feature_mapping = update_feature_mapping(path, feature_set, feature_mapping)
-#             for col_set in col_sets:
-#                 metrics = generate_feature_report(base_df, logger, path, depth_num, col_set)
-#                 numerical_metrics = pd.concat([numerical_metrics, metrics['numerical']], axis=0)
-#                 categorical_metrics = pd.concat([categorical_metrics, metrics['categorical']], axis=0)
-#                 del metrics
-#                 gc.collect()
-#     feature_mapping_df = pd.DataFrame(feature_mapping)
-#     feature_mapping_df.to_csv(Path(FEATURE_REPORT_PATH / "FeatureMapping.csv"))
-#     numerical_metrics.to_csv(Path(FEATURE_REPORT_PATH / "NumericalReport.csv"))
-#     categorical_metrics.to_csv(Path(FEATURE_REPORT_PATH / "CategoricalReport.csv"))
-    # TODO: Make DRY
-    # for path in depth_0:
-    #     depth = 0
-    #     metrics = generate_feature_report(base_df, logger, path, depth)
-    #     numerical_metrics = pd.concat([numerical_metrics, metrics['numerical']], axis=0)
-    #     categorical_metrics = pd.concat([categorical_metrics, metrics['categorical']], axis=0)
-    # for path in depth_1:
-    #     depth = 1
-    #     metrics = generate_feature_report(base_df, logger, path, depth)
-    #     numerical_metrics = pd.concat([numerical_metrics, metrics['numerical']], axis=0)
-    #     categorical_metrics = pd.concat([categorical_metrics, metrics['categorical']], axis=0)
-    # for path in depth_2:
-    #     col_sets = [None] # Will instruct pl to read all columns if not multi_path
-    #     depth = 2
-    #     multi_path = "*" in str(path)
-    #     if multi_path:
-    #         example_path = Path(str(path).replace("*", "0"))
-    #         feature_set = list(pl.scan_parquet(example_path).columns)
-    #         col_sets = split_features(feature_set, 4)
-    #     for col_set in col_sets:
-    #         metrics = generate_feature_report(base_df, logger, path, depth, col_set)
-    #         numerical_metrics = pd.concat([numerical_metrics, metrics['numerical']], axis=0)
-    #         categorical_metrics = pd.concat([categorical_metrics, metrics['categorical']], axis=0)
-    #         del metrics
-    #         gc.collect()
-            
-    # x = 2
-
 def unpack_and_iterate_through_tables(base_df, logger, data_store):
     numerical_metrics, categorical_metrics = pd.DataFrame(), pd.DataFrame()
     feature_mapping = {'Source': [], 'Feature': []}

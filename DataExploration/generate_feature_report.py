@@ -47,8 +47,7 @@ The ultimate destination of this data is a set of dashboards generated with plot
 TODO: Write unit tests to verify correctness.
 """
 
-
-from .config import FeaturePartitionEnum, BUCKET_NAME, CORE_COLUMNS
+from global_config import CORE_COLUMNS
 import pandas as pd
 import polars as pl
 import numpy as np
@@ -57,7 +56,7 @@ from collections import Counter
 from DataProcessing.pipeline import Pipeline
 from scipy.stats import chi2_contingency, skew, kurtosis
 from sklearn.feature_selection import mutual_info_classif
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
 
 CHUNK_SIZE = 10
@@ -70,7 +69,7 @@ class FeatureReport:
     def __init__(self, train_df, logger):
         self.logger = logger
         self.logger.info("Initializing feature report.")
-        self.columns_to_report = train_df.drop('case_id').columns
+        self.columns_to_report = train_df.drop(CORE_COLUMNS).columns
         self.train_df = train_df
         self.numerical_cols = []
         self.cat_cols = []
@@ -111,6 +110,8 @@ class FeatureReport:
         self.calculate_pct_na() # Num/Cat
 
         if self.numerical_cols:
+            self.concat_scaled_features()
+
             self.calculate_mean()
             self.calculate_median()
             self.calculate_min_and_max()
@@ -118,12 +119,19 @@ class FeatureReport:
             self.calculate_correlation_with_target()
             self.calculate_skew()
             self.calculate_kurtosis()
+            # self.calculate_mutual_info()
 
         if self.cat_cols:
             self.calculate_woe_iv()
             self.calculate_chi_squ_test()
 
-        # self.calculate_mutual_info()
+    def concat_scaled_features(self):
+        scaler = StandardScaler()
+        num_df = self.train_df[self.numerical_cols]
+        standardized_features = scaler.fit_transform(num_df)
+        std_cols = [x + "_std" for x in num_df.columns]
+        standardized_df = pd.DataFrame(standardized_features, columns=std_cols)
+        self.train_df = pl.concat([self.train_df, standardized_df], how="horizontal")
 
     def calculate_mutual_info(self, random_sample=True):
         """
